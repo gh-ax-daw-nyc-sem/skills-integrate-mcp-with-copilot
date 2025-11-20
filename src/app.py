@@ -156,7 +156,7 @@ def signup_for_activity(activity_name: str, email: str, authorization: Optional[
 
     # Add student
     activity["participants"].append(email)
-    return {"message": f"Signed up {email} for {activity_name}"}}
+    return {"message": f"Signed up {email} for {activity_name}"}
 
 
 @app.delete("/activities/{activity_name}/unregister")
