@@ -291,17 +291,20 @@ document.addEventListener("DOMContentLoaded", () => {
         localStorage.setItem("authToken", authToken);
         currentUser = result.username;
         
-        loginMessage.textContent = "Login successful!";
-        loginMessage.className = "success";
-        loginMessage.classList.remove("hidden");
+        // Immediately close modal and update UI
+        loginModal.classList.add("hidden");
+        loginForm.reset();
+        loginMessage.classList.add("hidden");
+        updateUIForLoggedIn(currentUser);
+        fetchActivities(); // Refresh to show delete buttons
         
+        // Show success message in main area
+        messageDiv.textContent = `Successfully logged in as ${currentUser}!`;
+        messageDiv.className = "success";
+        messageDiv.classList.remove("hidden");
         setTimeout(() => {
-          loginModal.classList.add("hidden");
-          loginForm.reset();
-          loginMessage.classList.add("hidden");
-          updateUIForLoggedIn(currentUser);
-          fetchActivities(); // Refresh to show delete buttons
-        }, 1000);
+          messageDiv.classList.add("hidden");
+        }, 3000);
       } else {
         loginMessage.textContent = result.detail || "Login failed";
         loginMessage.className = "error";
