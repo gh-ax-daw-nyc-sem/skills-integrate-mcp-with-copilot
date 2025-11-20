@@ -5,11 +5,14 @@ A super simple FastAPI application that allows students to view and sign up
 for extracurricular activities at Mergington High School.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import os
+import json
+import secrets
 from pathlib import Path
+from typing import Optional
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
@@ -18,6 +21,14 @@ app = FastAPI(title="Mergington High School API",
 current_dir = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=os.path.join(Path(__file__).parent,
           "static")), name="static")
+
+# Load teachers from JSON file
+teachers_file = Path(__file__).parent / "teachers.json"
+with open(teachers_file, "r") as f:
+    teachers_data = json.load(f)
+
+# In-memory session storage (in production, use Redis or similar)
+active_sessions = {}
 
 # In-memory activity database
 activities = {
@@ -83,14 +94,52 @@ def root():
     return RedirectResponse(url="/static/index.html")
 
 
+@app.post("/auth/login")
+def login(username: str, password: str):
+    """Authenticate a teacher and create a session"""
+    # Check if credentials match
+    for teacher in teachers_data["teachers"]:
+        if teacher["username"] == username and teacher["password"] == password:
+            # Generate session token
+            token = secrets.token_urlsafe(32)
+            active_sessions[token] = username
+            return {"token": token, "username": username}
+    
+    raise HTTPException(status_code=401, detail="Invalid credentials")
+
+
+@app.get("/auth/verify")
+def verify_session(authorization: Optional[str] = Header(None)):
+    """Verify if the current session is valid"""
+    if not authorization or authorization not in active_sessions:
+        return {"authenticated": False}
+    
+    return {
+        "authenticated": True,
+        "username": active_sessions[authorization]
+    }
+
+
+@app.post("/auth/logout")
+def logout(authorization: Optional[str] = Header(None)):
+    """Logout and invalidate the session"""
+    if authorization and authorization in active_sessions:
+        del active_sessions[authorization]
+    return {"message": "Logged out successfully"}
+
+
 @app.get("/activities")
 def get_activities():
     return activities
 
 
 @app.post("/activities/{activity_name}/signup")
-def signup_for_activity(activity_name: str, email: str):
-    """Sign up a student for an activity"""
+def signup_for_activity(activity_name: str, email: str, authorization: Optional[str] = Header(None)):
+    """Sign up a student for an activity (requires authentication)"""
+    # Check authentication
+    if not authorization or authorization not in active_sessions:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
     # Validate activity exists
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")
@@ -107,12 +156,16 @@ def signup_for_activity(activity_name: str, email: str):
 
     # Add student
     activity["participants"].append(email)
-    return {"message": f"Signed up {email} for {activity_name}"}
+    return {"message": f"Signed up {email} for {activity_name}"}}
 
 
 @app.delete("/activities/{activity_name}/unregister")
-def unregister_from_activity(activity_name: str, email: str):
-    """Unregister a student from an activity"""
+def unregister_from_activity(activity_name: str, email: str, authorization: Optional[str] = Header(None)):
+    """Unregister a student from an activity (requires authentication)"""
+    # Check authentication
+    if not authorization or authorization not in active_sessions:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
     # Validate activity exists
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")
